@@ -101,8 +101,12 @@ func New(control *nebula.Control) (*Service, error) {
 
 	go func() {
 		<-ctx.Done()
+		// Close only the inbound pipe to unblock the errgroup reader goroutine.
+		// outboundWriter is intentionally not closed here; it is closed by
+		// ctrl.Stop() → Interface.Close() → device.Close(), which also sets
+		// f.closed = true before closing. Closing outboundWriter prematurely
+		// (before f.closed is set) causes listenIn to call os.Exit(2).
 		reader.Close()
-		writer.Close()
 	}()
 
 	// create Goroutines to forward packets between Nebula and Gvisor
@@ -229,6 +233,11 @@ func (s *Service) Listen(network, address string) (net.Listener, error) {
 
 func (s *Service) Wait() error {
 	return s.eg.Wait()
+}
+
+// Context returns a context that is cancelled when the service is stopped.
+func (s *Service) Context() context.Context {
+	return s.control.Context()
 }
 
 func (s *Service) Close() error {

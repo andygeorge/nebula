@@ -1,0 +1,79 @@
+# nebula-tunnel example configuration
+#
+# nebula-tunnel extends the standard Nebula config with a "tunnel" section.
+# It runs in fully userspace mode (no TUN device, no root needed) and
+# proxies individual TCP connections over the Nebula overlay — like
+# Cloudflare Tunnel, but between nodes in your own private Nebula mesh.
+#
+# Usage:
+#   nebula-tunnel -config /etc/nebula/tunnel.yml
+
+# ── Standard Nebula connectivity ──────────────────────────────────────────────
+
+pki:
+  ca: /etc/nebula/ca.crt
+  cert: /etc/nebula/host.crt
+  key: /etc/nebula/host.key
+
+static_host_map:
+  "192.168.100.1": ["lighthouse.example.com:4242"]
+
+lighthouse:
+  am_lighthouse: false
+  interval: 60
+  hosts:
+    - "192.168.100.1"
+
+listen:
+  host: 0.0.0.0
+  port: 4242
+
+firewall:
+  outbound:
+    - port: any
+      proto: any
+      host: any
+  inbound:
+    - port: any
+      proto: icmp
+      host: any
+    # Allow peers to reach your exposed services. Tighten this to specific
+    # groups or CIDRs as needed.
+    - port: any
+      proto: tcp
+      host: any
+
+# ── Tunnel rules ──────────────────────────────────────────────────────────────
+
+tunnel:
+
+  # EXPOSE: make a local service reachable by Nebula peers.
+  #
+  # Other nodes on the overlay can connect to <your-nebula-ip>:<listen_port>
+  # and their traffic is forwarded to <forward> on this host.
+  # No inbound firewall ports are needed beyond the Nebula UDP port.
+  expose:
+    # Expose a local web server on Nebula port 80
+    - name: web
+      listen_port: 80
+      forward: "127.0.0.1:8080"
+
+    # Expose this host's SSH daemon on the Nebula overlay
+    - name: ssh
+      listen_port: 2222
+      forward: "127.0.0.1:22"
+
+  # ACCESS: make a remote Nebula peer's exposed service available locally.
+  #
+  # nebula-tunnel listens on 127.0.0.1:<local_port> and proxies connections
+  # through the overlay to <remote> (a Nebula peer's overlay IP:port).
+  access:
+    # Access a remote peer's exposed web server via localhost:8081
+    - name: remote-web
+      local_port: 8081
+      remote: "192.168.100.5:80"
+
+    # Access a remote PostgreSQL service via localhost:5432
+    - name: remote-db
+      local_port: 5432
+      remote: "192.168.100.10:5432"

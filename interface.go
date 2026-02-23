@@ -297,7 +297,11 @@ func (f *Interface) listenIn(reader io.ReadWriteCloser, i int) {
 	for {
 		n, err := reader.Read(packet)
 		if err != nil {
-			if errors.Is(err, os.ErrClosed) && f.closed.Load() {
+			// When the interface is intentionally closed, any read error is
+			// expected. Real TUN devices return os.ErrClosed; UserDevice (io.Pipe)
+			// returns io.EOF or io.ErrClosedPipe. Check f.closed first so we
+			// don't call os.Exit on a clean shutdown for either device type.
+			if f.closed.Load() {
 				return
 			}
 
